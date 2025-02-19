@@ -9,13 +9,19 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/anuragdevop/devops-exam.git'
+                git branch: 'main', url: 'https://github.com/anuragdevop/devops-exam.git'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                sh 'terraform init'
+                sh 'terraform init -backend-config="bucket=${S3_BUCKET}"'
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                sh 'terraform validate'
             }
         }
 
@@ -33,15 +39,17 @@ pipeline {
 
         stage('Deploy Lambda') {
             steps {
-                sh 'zip -r lambda.zip lambda_function.py'
-                sh 'aws lambda update-function-code --function-name candidate_lambda --zip-file fileb://lambda.zip'
+                sh '''
+                zip -r lambda.zip lambda_function.py
+                aws lambda update-function-code --function-name candidate_lambda --zip-file fileb://lambda.zip --region ${AWS_REGION}
+                '''
             }
         }
 
         stage('Invoke Lambda') {
             steps {
                 script {
-                    def response = sh(script: 'aws lambda invoke --function-name candidate_lambda --log-type Tail lambda_response.json', returnStdout: true).trim()
+                    def response = sh(script: 'aws lambda invoke --function-name candidate_lambda --log-type Tail lambda_response.json --region ${AWS_REGION}', returnStdout: true).trim()
                     echo "Lambda Response: ${response}"
                 }
             }
